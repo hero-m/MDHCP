@@ -1,0 +1,18 @@
+roadmap:
+v0.1.0 ) understand and build the dhcp message structure. successfully send a dhcp discover message.
+
+v0.2.0 ) parse a dhcp message. complete the dhcp packet class. !complete the options constants (rfc 2132).
+
+v0.5.0 ) answer an incoming discover message with a valid offer message.
+
+v0.6.0 ) answer an incoming dhcp request message with a valid acknowlege message.
+
+v0.7.0 ) create a database of connected clients.
+
+v0.8.0 ) build a simple gui for transmitted messages.
+
+v0.9.0 ) perfect the gui. build a gui for the list of connected clients.
+
+v0.9.9 ) first beta version.
+
+v1.0.0 ) first public release (god willing). 
