@@ -1,7 +1,10 @@
 package mnet;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Arrays;
 import java.util.Random;
 import java.util.Vector;
 
@@ -21,26 +24,25 @@ public class DHCPPacket {
 				   chaddr, //client's hardware address (16 bytes)
 				   sname,  //64 bytes
 				   file;   //128 bytes
-	
+	private int padding = 0;
 	private Vector<Option> options; //variable number of options
 	
 	public DHCPPacket(){ 
 		options = new Vector<Option>();
 	}
-	public DHCPPacket setOp(byte op){
+	public DHCPPacket setOp    (byte op){
 		if(op != Constants.BOOTREQUEST && op != Constants.BOOTREPLY)
 			throw new IllegalArgumentException();
 		this.op = op;
 		return this;
 	}
-	public DHCPPacket setHtype (byte i) { this.htype = i; return this; }
+	public DHCPPacket setHtype (byte i)     { this.htype = i    ; return this; }
 	public DHCPPacket setHlen  (byte hlen)  { this.hlen  = hlen ; return this; }
 	public DHCPPacket setHops  (byte hops)  { this.hops  = hops ; return this; }
 	public DHCPPacket setXid   (byte[] xid) { this.xid   = xid  ; return this; }
 	public DHCPPacket setXid   (int xid)    { this.xid   = ByteFactory.getIntAsBytes(xid)    ; return this; }
 	public DHCPPacket generateXid(){
-		Random rand = new Random();
-		this.xid = ByteFactory.getIntAsBytes(rand.nextInt());
+		this.xid = ByteFactory.getIntAsBytes(new Random().nextInt());
 		return this;
 	}
 	public DHCPPacket setSecs  (byte[] secs){ this.secs  = secs ; return this; }
@@ -81,7 +83,6 @@ public class DHCPPacket {
 		if(data.length != len) throw new IllegalArgumentException();
 		options.add(new Option(code, len, data)); return this;
 	}
-	
 	public byte[]     getOption(byte code){
 		for(Option option : options){
 			if(option.code == code)
@@ -90,12 +91,71 @@ public class DHCPPacket {
 		return null;
 	}
 	
-	public byte[] getFlags(){
-		return flags;
-	}
+	public byte       getOp    (){ return op    ; }
+	public byte       getHtype (){ return htype ; }
+	public byte       getHlen  (){ return hlen  ; }
+	public byte       getHops  (){ return hops  ; }
+	public byte[]     getXid   (){ return xid   ; }
+	public byte[]     getSecs  (){ return secs  ; }
+	public byte[]     getCiaddr(){ return ciaddr; }
+	public byte[]     getYiaddr(){ return yiaddr; }
+	public byte[]     getSiaddr(){ return siaddr; }
+	public byte[]     getGiaddr(){ return giaddr; }
+	public byte[]     getChaddr(){ return chaddr; }
+	public byte[]     getSname (){ return sname ; }
+	public byte[]     getFile  (){ return file  ; }
+	public byte[]     getFlags (){ return flags ; }
+	public boolean    getBroadcastFlag(){ if(flags[0] == 0) return false; else return true; }
 	
-	public byte[] array(){
-		java.io.ByteArrayOutputStream out = new ByteArrayOutputStream();
+	public void       read (byte[] array){
+		ByteArrayInputStream in = new ByteArrayInputStream(array);
+		try {
+			read(in);
+		} catch (IOException e) { e.printStackTrace(); }
+	}
+	public void       read (InputStream in) throws IOException{
+		byte[] temp = new byte[1];
+		in.read(temp); op    = temp[0];
+		in.read(temp); htype = temp[0];
+		in.read(temp); hlen  = temp[0];
+		in.read(temp); hops  = temp[0];
+		
+		xid    = new byte[4];  in.read(xid)   ;
+		secs   = new byte[2];  in.read(secs)  ;
+		flags  = new byte[2];  in.read(flags) ;
+		ciaddr = new byte[4];  in.read(ciaddr);
+		yiaddr = new byte[4];  in.read(yiaddr);
+		siaddr = new byte[4];  in.read(siaddr);
+		giaddr = new byte[4];  in.read(giaddr);
+		chaddr = new byte[16]; in.read(chaddr);
+		sname  = new byte[64]; in.read(sname) ;
+		file   = new byte[128];in.read(file)  ;
+		byte[] magiccookie = new byte[4];
+		in.read(magiccookie);
+		if(!Arrays.equals(magiccookie, Constants.magicCookie))
+			throw new Error("Bad Input Data. (Packet Data Corrupted)");
+		while(in.available() > 0){
+			in.read(temp);
+			byte code = temp[0];
+			if(code == 0xff)
+				break;
+			in.read(temp);
+			byte len = temp[0];
+			byte[] data = new byte[len];
+			in.read(data);
+			options.add(new Option(code, len, data));
+		}
+		
+		padding = 0;
+		while(in.available() > 0){
+			in.read(temp);
+			if(temp[0] != 0)
+				throw new IOException("Wrong padding at end of options.");
+			padding++;
+		}
+	}
+	public byte[]     array(){
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
 		byte[] array = null;
 		try {
 			write(out);
@@ -103,7 +163,7 @@ public class DHCPPacket {
 		} catch (IOException e) { e.printStackTrace(); }
 		return array;
 	}
-	public void write(OutputStream out) throws IOException{
+	public void       write(OutputStream out) throws IOException{
 		out.write(new byte[]{op});
 		out.write(new byte[]{htype});
 		out.write(new byte[]{hlen});
