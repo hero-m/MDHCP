@@ -60,6 +60,20 @@
 59	Rebinding (T2) Time Value
 60	Class-identifier
 61	Client-identifier
-62-127	Unassigned
+62-63 Unassigned
+64	Network Information Service+ Domain Option
+65	Network Information Service+ Servers Option
+66	TFTP Server Name
+67	Bootfile Name
+68	Mobile IP Home Agent Option
+69	Simple Mail Transport Protocol (SMTP) Server Option
+70	Post Office Protocol (POP3) Server Option
+71	Network News Transport Protocol (NNTP) Server Option
+72	Default World Wide Web (WWW) Server Option
+73	Default Finger Server Option
+74	Default Internet Relay Chat (IRC) Server Option
+75	StreetTalk Server Option
+76	StreetTalk Directory Assistance (STDA) Server Option
+77-127	Unassigned
 128-254	Site-specific Option
 255	End Option
