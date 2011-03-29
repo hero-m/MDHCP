@@ -30,4 +30,7 @@ public class DHCPServer {
 			data = java.util.Arrays.copyOf(temp, len);
 		}catch(IOException e){e.printStackTrace();}
 	}
+	public byte[] getData(){
+		return data;
+	}
 }

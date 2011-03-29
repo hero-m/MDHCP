@@ -1,7 +1,7 @@
 roadmap:
 v0.1.0 ) understand and build the dhcp message structure. successfully send a dhcp discover message.
 
-v0.2.0 ) parse a dhcp message. complete the dhcp packet class. !complete the options constants (rfc 2132).
+v0.2.0 ) parse a dhcp message. complete the dhcp packet class.
 
 v0.5.0 ) answer an incoming discover message with a valid offer message.
 

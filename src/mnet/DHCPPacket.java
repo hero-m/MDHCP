@@ -137,7 +137,7 @@ public class DHCPPacket {
 		while(in.available() > 0){
 			in.read(temp);
 			byte code = temp[0];
-			if(code == 0xff)
+			if(code == -1)
 				break;
 			in.read(temp);
 			byte len = temp[0];
