@@ -1,10 +1,6 @@
 package mnet;
 
 
-import java.net.InetAddress;
-import java.net.NetworkInterface;
-import java.net.SocketException;
-import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.util.Arrays;
@@ -97,18 +93,5 @@ public class ByteFactory {
 		for(int i = 0; i < data.length; i++)
 			hexStr = hexStr + ByteFactory.getHex(data[i]);
 		return hexStr;
-	}
-	public static byte[] getMacAddress(int len){
-		InetAddress ip;
-		try {
-				ip = InetAddress.getLocalHost();
-			NetworkInterface network = NetworkInterface.getByInetAddress(ip);
-		
-			byte[] mac = network.getHardwareAddress();
-			return Arrays.copyOf(mac, len);
-		} catch (UnknownHostException e) { e.printStackTrace();
-		} catch (SocketException e) { e.printStackTrace(); }	
-		
-		return null;
 	}
 }

@@ -11,22 +11,27 @@ import java.net.UnknownHostException;
 public class DHCPMain {
 	public static void main(String[] args){
 		/*try{
-			byte[] data = Helper.sendDiscoverPacket();
+			byte[] data = Helper.sendDiscoverPacket("eth0");
 			FileOutputStream file = new FileOutputStream("log.txt");
 			file.write(ByteFactory.simpleFormatted(data).getBytes("US-ASCII"));
 			file.flush();
 		}catch (IOException e) { e.printStackTrace(); } /**/
-		try{
+		/*try{
 			DHCPServer server = new DHCPServer();
-			server.capturePacket();
+			byte[] data = server.capturePacket();
 			FileOutputStream file = new FileOutputStream("log.txt");
 			DHCPPacket packet = new DHCPPacket();
-			packet.read(server.getData());
+			packet.read(data);
 			file.write(("Packet length: "+ packet.array().length + "\n").getBytes("US-ASCII"));
 			file.write(ByteFactory.simpleFormatted(packet.array()).getBytes("US-ASCII"));
 			file.close();
 		}catch(SocketException e){e.printStackTrace();
 		}catch(IOException     e){e.printStackTrace();}/**/
+		/*Helper.getPacketAsClient("eth0");/**/
+		try {
+			DHCPServer server = new DHCPServer();
+			server.start();
+		} catch (SocketException e) { e.printStackTrace(); }
+		
 	}
-
 }

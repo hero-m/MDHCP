@@ -9,21 +9,21 @@ import java.util.Random;
 import java.util.Vector;
 
 public class DHCPPacket {
-	private byte op,
-				 htype,
-				 hlen,
-				 hops;
+	private byte   op    ,
+				   htype ,
+				   hlen  ,
+				   hops  ;
 	
-	private byte[] xid, //4 bytes
-				   secs, //2 bytes
-				   flags, //2 bytes (15 bits reserved for later!)
+	private byte[] xid   , //4 bytes
+				   secs  , //2 bytes
+				   flags , //2 bytes (15 bits reserved for later!)
 				   ciaddr, //Client's IP Address (4 bytes)
 				   yiaddr, //your (client's) ip address (4 bytes)
 				   siaddr, //4 bytes
 				   giaddr, //4 bytes
 				   chaddr, //client's hardware address (16 bytes)
-				   sname,  //64 bytes
-				   file;   //128 bytes
+				   sname ,  //64 bytes
+				   file  ;   //128 bytes
 	private int padding = 0;
 	private Vector<Option> options; //variable number of options
 	
@@ -120,16 +120,16 @@ public class DHCPPacket {
 		in.read(temp); hlen  = temp[0];
 		in.read(temp); hops  = temp[0];
 		
-		xid    = new byte[4];  in.read(xid)   ;
-		secs   = new byte[2];  in.read(secs)  ;
-		flags  = new byte[2];  in.read(flags) ;
+		xid    = new byte[4];  in.read(xid   );
+		secs   = new byte[2];  in.read(secs  );
+		flags  = new byte[2];  in.read(flags );
 		ciaddr = new byte[4];  in.read(ciaddr);
 		yiaddr = new byte[4];  in.read(yiaddr);
 		siaddr = new byte[4];  in.read(siaddr);
 		giaddr = new byte[4];  in.read(giaddr);
 		chaddr = new byte[16]; in.read(chaddr);
-		sname  = new byte[64]; in.read(sname) ;
-		file   = new byte[128];in.read(file)  ;
+		sname  = new byte[64]; in.read(sname );
+		file   = new byte[128];in.read(file  );
 		byte[] magiccookie = new byte[4];
 		in.read(magiccookie);
 		if(!Arrays.equals(magiccookie, Constants.magicCookie))
