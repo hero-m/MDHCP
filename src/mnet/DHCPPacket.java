@@ -132,7 +132,7 @@ public class DHCPPacket {
 		file   = new byte[128];in.read(file  );
 		byte[] magiccookie = new byte[4];
 		in.read(magiccookie);
-		if(!Arrays.equals(magiccookie, Constants.magicCookie))
+		if(!Arrays.equals(magiccookie, Constants.MAGICCOOKIE))
 			throw new Error("Bad Input Data. (Packet Data Corrupted)");
 		while(in.available() > 0){
 			in.read(temp);
@@ -179,7 +179,7 @@ public class DHCPPacket {
 		out.write(sname);
 		out.write(file);
 		int len = 0;
-		out.write(Constants.magicCookie);
+		out.write(Constants.MAGICCOOKIE);
 		len += 4;
 		for(Option option : options){
 			out.write(new byte[]{option.code});

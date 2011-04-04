@@ -30,7 +30,7 @@ public class DHCPServer{
 				ReplyThread reply  = new ReplyThread(packet);
 				Thread replyThread = new Thread(reply);
 				replyThread.run();
-				System.out.println("Packet received at " + Calendar.getInstance() + ".");
+				System.out.println("Packet received at " + Calendar.getInstance().getTime().toString() + ".");
 			} catch (IOException e) { e.printStackTrace(); }
 		}
 	}
@@ -63,6 +63,10 @@ public class DHCPServer{
 			byte[] requestdata = java.util.Arrays.copyOf(requestPacket.getData(), len);
 			DHCPPacket request = new DHCPPacket();
 			request.read(requestdata);
+			if(request.getOption((byte)53)[0] == Constants.DHCPDISCOVER)
+				sendOffer(request);
+		}
+		public void sendOffer(DHCPPacket request){
 			DHCPPacket reply = new DHCPPacket();
 			reply.setOp(Constants.BOOTREQUEST)
 				 .setHtype((byte) 1)
@@ -80,7 +84,7 @@ public class DHCPServer{
 				 .setFile(0);
 			
 			reply.addOption((byte)53, (byte)1, new byte[]{2}) //dhcp offer
-				 .addOption((byte)1 , (byte)4, new byte[]{-1, -1, -1, 0}) //subnet mask
+				 .addOption((byte)1 , (byte)4, new byte[]{(byte)255, (byte)255, (byte)255 , (byte)0   }) //subnet mask
 				 .addOption((byte)3 , (byte)4, new byte[]{(byte)192, (byte)168, (byte)1   , (byte)1   }) //gateway
 				 .addOption((byte)6 , (byte)4, new byte[]{(byte)192, (byte)168, (byte)1   , (byte)1   }) //dns
 				 .addOption((byte)58, (byte)4, new byte[]{(byte)0  , (byte)1  , (byte)0xfa, (byte)0x40}) //renewal time
