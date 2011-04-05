@@ -29,9 +29,9 @@ public class DHCPMain {
 		}catch(IOException     e){e.printStackTrace();}/**/
 		/*Helper.getPacketAsClient("eth0");/**/
 		try {
-			DHCPServer server = new DHCPServer();
+			DHCPServer server = new DHCPServer(InetAddress.getByAddress(new byte[]{(byte)192, (byte)168, (byte)1, (byte)1}));
 			server.start();
-		} catch (SocketException e) { e.printStackTrace(); }
-		
+		} catch (SocketException e) { e.printStackTrace();
+		} catch (UnknownHostException e) { e.printStackTrace(); }
 	}
 }

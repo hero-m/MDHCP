@@ -13,6 +13,10 @@ public class ByteFactory {
 		if(str.length() > 2) str = str.substring(str.length() - 2);
 		return str;
 	}
+	public static int asInt(byte b){
+		if(b < 0) return (int)(255 + b);
+		else return b;
+	}
 	public static String getBinary(byte b){
 		int num = (int)b;
 		String str = Integer.toBinaryString(num);

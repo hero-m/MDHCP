@@ -3,12 +3,27 @@ package mnet;
 import java.io.IOException;
 import java.net.*;
 import java.util.Calendar;
+import java.util.Vector;
 public class DHCPServer{
 	
 	private DatagramSocket socket;
 	private final static int MAX_LEN = 2048;
-	
+	private InetAddress ia;
 	public DHCPServer() throws SocketException{
+		Vector<InetAddress> ias = Helper.getAvailableInetAddresses();
+		ia = ias.firstElement();
+		if(ias.size() > 1)
+			System.out.println("Multiple IP Addresses detected. Using " + 
+								Helper.convertIPtoString(ia.getAddress()));
+		else if(ias.size() == 0)
+			throw new UnsupportedOperationException("Error: No IP Addresses detected.");
+		init();
+	}
+	public DHCPServer(InetAddress ia) throws SocketException{
+		this.ia = ia;
+		init();
+	}
+	private void init() throws SocketException{
 		try{
 			socket = new DatagramSocket(67);
 			System.out.println("DHCP Server Created.\n" +
@@ -63,10 +78,13 @@ public class DHCPServer{
 			byte[] requestdata = java.util.Arrays.copyOf(requestPacket.getData(), len);
 			DHCPPacket request = new DHCPPacket();
 			request.read(requestdata);
-			if(request.getOption((byte)53)[0] == Constants.DHCPDISCOVER)
-				sendOffer(request);
+			byte requestType = request.getOption((byte)53)[0];
+			if(requestType == Constants.DHCPDISCOVER)
+				sendReply(request, Constants.DHCPOFFER);
+			if(requestType == Constants.DHCPREQUEST)
+				sendReply(request, Constants.DHCPACK);
 		}
-		public void sendOffer(DHCPPacket request){
+		public void sendReply(DHCPPacket request, byte requestType){
 			DHCPPacket reply = new DHCPPacket();
 			reply.setOp(Constants.BOOTREQUEST)
 				 .setHtype((byte) 1)
@@ -77,13 +95,13 @@ public class DHCPServer{
 				 .setBroadcastFlag(true)
 				 .setCiaddr(0)
 				 .setYiaddr(getNextAddress())
-				 .setSiaddr(requestPacket.getAddress().getAddress())
+				 .setSiaddr(ia.getAddress())
 				 .setGiaddr(0)
 				 .setChaddr(request.getChaddr())
 				 .setSname(0)
 				 .setFile(0);
 			
-			reply.addOption((byte)53, (byte)1, new byte[]{2}) //dhcp offer
+			reply.addOption((byte)53, (byte)1, new byte[]{requestType}) //dhcp offer
 				 .addOption((byte)1 , (byte)4, new byte[]{(byte)255, (byte)255, (byte)255 , (byte)0   }) //subnet mask
 				 .addOption((byte)3 , (byte)4, new byte[]{(byte)192, (byte)168, (byte)1   , (byte)1   }) //gateway
 				 .addOption((byte)6 , (byte)4, new byte[]{(byte)192, (byte)168, (byte)1   , (byte)1   }) //dns

@@ -9,6 +9,8 @@ import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.Arrays;
+import java.util.Enumeration;
+import java.util.Vector;
 
 public class Helper {
 	public static byte[] getMacAddress(String hw, int len){
@@ -73,5 +75,30 @@ public class Helper {
 			file.close();
 		} catch (SocketException e) { e.printStackTrace();
 		} catch (IOException e) { e.printStackTrace(); }
+	}
+	public static Vector<InetAddress> getAvailableInetAddresses(){
+		Vector<InetAddress> found = new Vector<InetAddress>();
+		try {
+			Enumeration<NetworkInterface> nis =
+				NetworkInterface.getNetworkInterfaces();
+			while(nis.hasMoreElements()){
+				NetworkInterface ni = nis.nextElement();
+				Enumeration<InetAddress> ias = ni.getInetAddresses();
+				while(ias.hasMoreElements()){
+					InetAddress ia = ias.nextElement();
+					if(!ia.isLoopbackAddress() && ia.isSiteLocalAddress() && !found.contains(ia))
+						found.add(ia);
+				}
+			}
+		} catch (SocketException e) { e.printStackTrace(); }
+		if(found.size() > 0)
+			return found;
+		else
+			return null;
+	}
+	public static String convertIPtoString(byte[] ip){
+		if(ip.length != 4) return null;
+		return ByteFactory.asInt(ip[0]) + "." + ByteFactory.asInt(ip[1]) + "." +
+			   ByteFactory.asInt(ip[2]) + "." + ByteFactory.asInt(ip[3]);
 	}
 }
