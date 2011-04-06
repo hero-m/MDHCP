@@ -98,4 +98,17 @@ public class ByteFactory {
 			hexStr = hexStr + ByteFactory.getHex(data[i]);
 		return hexStr;
 	}
+	public static int getBytesAsInt(byte[] bytes){
+		int pow = 1;
+		int res = 0;
+		for(int i = 0; i < bytes.length; i++){
+			int t = bytes[i];
+			if(t < 0)
+				res += (256 + t) * pow;
+			else
+				res += t * pow;
+			pow *= 256;
+		}
+		return res;
+	}
 }
