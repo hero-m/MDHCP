@@ -1,14 +1,14 @@
-/* todo: dhcprelease
- * todo: refresh
- * */
 package mnet;
 
 import java.io.IOException;
 import java.net.*;
 import java.util.Arrays;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Vector;
+import java.awt.event.*;
+import javax.swing.Timer;
 public class DHCPServer{
 
 	private HashMap<byte[], Lease> db;
@@ -20,6 +20,11 @@ public class DHCPServer{
 	private byte[] dhcpServerIP, gateway, dns, serverid,
 					renewaltime, rebindingtime, leasetime,
 					subnetmask;
+	private Timer timer = new Timer(15 * 60 * 1000, new ActionListener(){
+		public void actionPerformed(ActionEvent e){
+			revokeExpiredLease();
+		}
+	});
 	public DHCPServer() throws SocketException{
 		Vector<InetAddress> ias = Helper.getAvailableInetAddresses();
 		dhcpServerIA = ias.firstElement();
@@ -46,6 +51,7 @@ public class DHCPServer{
 		rebindingtime = new byte[]{(byte)0  , (byte)3  , (byte)0x75, (byte)0xf0};
 		leasetime     = new byte[]{(byte)0  , (byte)3  , (byte)0xf4, (byte)0x80};
 		subnetmask    = new byte[]{(byte)255, (byte)255, (byte)255 , (byte)0   };
+		timer.start();
 		try{
 			socket = new DatagramSocket(67);
 			System.out.println("DHCP Server Created.\n" +
@@ -127,7 +133,30 @@ public class DHCPServer{
 		}catch(IOException e){e.printStackTrace();}
 		return null;
 	}
-	
+	private void revokeExpiredLease(){
+		synchronized(this){
+			Vector<Lease> toBeRemoved = new Vector<Lease>();
+			for(Lease lease : db.values()){
+				Date end = add(lease.getLeaseStart(), lease.getLeaseTime());
+				if(end.before(Calendar.getInstance().getTime())){
+					toBeRemoved.add(lease);
+				}
+			}
+			for(int i = 0; i < toBeRemoved.size(); i++){
+				ips.remove((Object)((int)toBeRemoved.elementAt(i).getIP()[3]));
+				 db.remove(toBeRemoved.elementAt(i).getHwAddress());
+			}
+		}
+	}
+	private Date add(Date first, Date other){
+		Calendar c = Calendar.getInstance();
+		c.setTime(first);
+		long firsttime = c.getTimeInMillis();
+		c.setTime(other);
+		long othertime = c.getTimeInMillis();
+		c.setTimeInMillis(firsttime + othertime);
+		return c.getTime();
+	}
 	private class ReplyThread implements Runnable{
 		DatagramPacket requestPacket;
 		public ReplyThread(DatagramPacket requestdp){
@@ -150,6 +179,16 @@ public class DHCPServer{
 					sendReply(request, Constants.DHCPACK, reservedIP);
 				else
 					sendReply(request, Constants.DHCPNACK, reservedIP);
+			}else if(requestType == Constants.DHCPRELEASE){
+				synchronized(this){
+					byte[] hwAddress = request.getChaddr();
+					Lease lease = db.get(hwAddress);
+					if(lease != null){
+						byte[] ip = lease.getIP();
+						ips.remove((Object)((int)ip[3]));
+						db.remove(hwAddress);
+					}
+				}
 			}
 		}
 		public void sendReply(DHCPPacket request, byte requestType, byte[] reservedIP){
