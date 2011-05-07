@@ -1,12 +1,5 @@
-package mnet;
 
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.SocketException;
-import java.net.UnknownHostException;
+import mgui.DHCPFrame;
 
 public class DHCPMain {
 	public static void main(String[] args){
@@ -28,10 +21,11 @@ public class DHCPMain {
 		}catch(SocketException e){e.printStackTrace();
 		}catch(IOException     e){e.printStackTrace();}/**/
 		/*Helper.getPacketAsClient("eth0");/**/
-		try {
+		/*try {
 			DHCPServer server = new DHCPServer(InetAddress.getByAddress(new byte[]{(byte)192, (byte)168, (byte)1, (byte)1}));
 			server.start();
 		} catch (SocketException e) { e.printStackTrace();
-		} catch (UnknownHostException e) { e.printStackTrace(); }
+		} catch (UnknownHostException e) { e.printStackTrace(); }*/
+		new DHCPFrame();
 	}
 }

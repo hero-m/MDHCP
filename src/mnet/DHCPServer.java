@@ -1,26 +1,25 @@
 package mnet;
 
 import java.io.IOException;
-import java.net.*;
-import java.util.Arrays;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Vector;
-import java.awt.event.*;
-import javax.swing.Timer;
-public class DHCPServer{
-
-	private HashMap<byte[], Lease> db;
+import java.net.*         ;
+import java.util.Arrays   ;
+import java.util.Calendar ;
+import java.util.Date     ;
+import java.util.HashMap  ;
+import java.util.Vector   ;
+import java.awt.event.*   ;
+import javax.swing.Timer  ;
+public class DHCPServer implements Runnable{
+	private HashMap<ByteArray, Lease> db;
 	private Vector<Integer> ips;
-	private HashMap<Integer, byte[]>reserved;
+	private HashMap<Integer, ReservedLease>reserved;
 	private DatagramSocket socket;
 	private final static int MAX_LEN = 2048;
 	private InetAddress dhcpServerIA;
 	private byte[] dhcpServerIP, gateway, dns, serverid,
 					renewaltime, rebindingtime, leasetime,
 					subnetmask;
-	private Timer timer = new Timer(15 * 60 * 1000, new ActionListener(){
+	private Timer timer = new Timer(5 * 60 * 1000, new ActionListener(){
 		public void actionPerformed(ActionEvent e){
 			revokeExpiredLease();
 		}
@@ -40,9 +39,9 @@ public class DHCPServer{
 		init();
 	}
 	private void init() throws SocketException{
-		db  = new HashMap<byte[], Lease>(255);
+		db  = new HashMap<ByteArray, Lease>(255);
 		ips = new  Vector<Integer>(255);
-		reserved = new HashMap<Integer, byte[]>(255);
+		reserved = new HashMap<Integer, ReservedLease>(255);
 		dhcpServerIP  = dhcpServerIA.getAddress();
 		serverid      = dhcpServerIP;
 		gateway       = dhcpServerIP;
@@ -62,7 +61,9 @@ public class DHCPServer{
 			throw e;
 		}
 	}
-	
+	public void run(){
+		this.start();
+	}
 	public void start(){
 		System.out.println("Server started listening on port 67...");
 		while(true){
@@ -79,18 +80,18 @@ public class DHCPServer{
 	}
 	private byte[] reserveNextAddress(byte[] hwAddress){
 		synchronized(this){
-			if(db.containsKey(hwAddress))
-				return db.get(hwAddress).getIP();
+			ByteArray hwArray = new ByteArray(hwAddress);
+			if(db.containsKey(hwArray))
+				return db.get(hwArray).getIP();
 			if(ips.size() + reserved.size() >= 254){
-				//refresh();
+				revokeExpiredLease();
 				if(ips.size() + reserved.size() >= 254)
 					return null;
 			}
 			for(int i = 2; i < 255; i++){
 				if(!ips.contains(i) && !reserved.containsValue(i)){
 					byte[] newip = new byte[] {dhcpServerIP[0], dhcpServerIP[1], dhcpServerIP[2], (byte)i};
-					reserved.put(i, hwAddress);
-					System.out.println("FTail: " + i);
+					reserved.put(i, new ReservedLease(hwAddress, Calendar.getInstance().getTime()));
 					return newip;
 				}
 			}
@@ -98,22 +99,25 @@ public class DHCPServer{
 		return null;
 	}
 	private boolean registerAddress(byte[] ip, byte[] hwAddress){
+		ByteArray hwArray = new ByteArray(hwAddress);
 		synchronized(this){
 			int tail = (int)(ip[3]);
-			System.out.println("RTail: " + tail);
-			System.out.println(reserved.get(tail));
-			System.out.println(hwAddress);
+			System.out.print("IP: ");
+			for(int i = 0; i < ip.length; i++)
+				System.out.print(ip[i] + " ");
+			System.out.println();
 			if(ips.contains(tail)){
-				if(db.containsKey(hwAddress) && Arrays.equals(ip, db.get(hwAddress).getIP())){
-					db.remove(hwAddress);
-					db.put(hwAddress, new Lease(ip, hwAddress, leasetime));
+				System.out.print("DB IP: ");
+				
+				if(db.containsKey(hwArray) && Arrays.equals(ip, db.get(hwArray).getIP())){
+					db.remove(hwArray);
+					db.put(hwArray, new Lease(ip, hwAddress, leasetime));
 					return true;
 				}
-			}else if(reserved.containsKey(tail) && Arrays.equals(reserved.get(tail), hwAddress)){
-				//reserved.remove(hwAddress);
+			}else if(reserved.containsKey(tail) && Arrays.equals(reserved.get(tail).hwAddress, hwAddress)){
 				reserved.remove(tail);
 				ips.add(tail);
-				db.put(hwAddress, new Lease(ip, hwAddress, leasetime));
+				db.put(hwArray, new Lease(ip, hwAddress, leasetime));
 				return true;
 			}
 			return false;
@@ -136,15 +140,26 @@ public class DHCPServer{
 	private void revokeExpiredLease(){
 		synchronized(this){
 			Vector<Lease> toBeRemoved = new Vector<Lease>();
+			Date now = Calendar.getInstance().getTime();
 			for(Lease lease : db.values()){
 				Date end = add(lease.getLeaseStart(), lease.getLeaseTime());
-				if(end.before(Calendar.getInstance().getTime())){
+				if(end.before(now)){
 					toBeRemoved.add(lease);
 				}
 			}
 			for(int i = 0; i < toBeRemoved.size(); i++){
 				ips.remove((Object)((int)toBeRemoved.elementAt(i).getIP()[3]));
-				 db.remove(toBeRemoved.elementAt(i).getHwAddress());
+				 db.remove(new ByteArray(toBeRemoved.elementAt(i).getHwAddress()));
+			}
+			
+			long now_seconds = now.getTime();
+			Vector<Integer> r = new Vector<Integer>();
+			for(int rl : reserved.keySet()){
+				if(now_seconds > reserved.get(rl).date + 600 * 1000)
+					r.add(rl);
+			}
+			for(int i = 0; i < r.size(); i++){
+				reserved.remove(r.elementAt(i));
 			}
 		}
 	}
@@ -173,6 +188,7 @@ public class DHCPServer{
 				byte[] reservedIP = reserveNextAddress(request.getChaddr());
 				sendReply(request, Constants.DHCPOFFER, reservedIP);
 			}else if(requestType == Constants.DHCPREQUEST){
+				
 				byte[] reservedIP = request.getOption((byte)50); 
 				boolean success = registerAddress(reservedIP, request.getChaddr());
 				if(success)
@@ -182,18 +198,18 @@ public class DHCPServer{
 			}else if(requestType == Constants.DHCPRELEASE){
 				synchronized(this){
 					byte[] hwAddress = request.getChaddr();
-					Lease lease = db.get(hwAddress);
+					Lease lease = db.get(new ByteArray(hwAddress));
 					if(lease != null){
 						byte[] ip = lease.getIP();
 						ips.remove((Object)((int)ip[3]));
-						db.remove(hwAddress);
+						db.remove(new ByteArray(hwAddress));
 					}
 				}
 			}
 		}
 		public void sendReply(DHCPPacket request, byte requestType, byte[] reservedIP){
 			DHCPPacket reply = new DHCPPacket();
-			reply.setOp(Constants.BOOTREQUEST)
+			reply.setOp(Constants.BOOTREPLY)
 				 .setHtype ((byte) 1)
 				 .setHlen  ((byte) 6)
 				 .setHops  ((byte) 0)
@@ -228,9 +244,45 @@ public class DHCPServer{
 				replyPacket.setAddress(InetAddress.getByAddress(new byte[]{(byte)255, (byte)255, (byte)255, (byte)255}));
 				socket.setBroadcast(true);
 				socket.send(replyPacket);
-			} catch (SocketException      e) { e.printStackTrace();
+			} catch (     SocketException e) { e.printStackTrace();
 			} catch (UnknownHostException e) { e.printStackTrace();
-			} catch (IOException          e) { e.printStackTrace(); }
+			} catch (         IOException e) {
+				System.out.println("Error Sending Reply. Are you still connected?");
+			}
 		}
+	}
+	private class ReservedLease{
+		byte[] hwAddress;
+		long date;
+		ReservedLease(byte[] hw, Date d){
+			hwAddress = hw;
+			date = d.getTime();
+		}
+	}
+	private class ByteArray{
+		byte[] data;
+		ByteArray(byte[] d){
+			data = d;
+		}
+		@Override
+		public boolean equals(Object obj){
+			if(!(obj instanceof ByteArray))
+				return false;
+			ByteArray other = (ByteArray) obj;
+			for(int i = 0; i < other.data.length; i++){
+				if(data[i] != other.data[i]) return false;
+			}
+			return true;
+		}
+		@Override
+		public int hashCode(){
+			int hash = data[0];
+			for(int i = 1; i < data.length; i++){
+				hash = Integer.rotateLeft(hash, 8);
+				hash ^= data[i];
+			}
+			return hash;
+		}
+		
 	}
 }
