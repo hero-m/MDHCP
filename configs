@@ -1,0 +1,7 @@
+gateway: 192.168.0.1
+lease: 259200
+prefix: 192.168.0.0
+dns: 4.2.2.4
+renewal: 86400
+subnet-mask: 255.255.255.0
+rebinding: 129600

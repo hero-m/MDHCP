@@ -145,14 +145,18 @@ public class DHCPPacket {
 			in.read(data);
 			options.add(new Option(code, len, data));
 		}
-		
+		System.out.println("Finished Reading packet.");
+		/*System.out.println(options.get(53).code + "**");
+		System.out.flush();
 		padding = 0;
-		while(in.available() > 0){
+		/*while(in.available() > 0){
 			in.read(temp);
+			System.out.println(temp[0] + "*");
 			if(temp[0] != 0)
 				throw new IOException("Wrong padding at end of options.");
 			padding++;
-		}
+		}*/
+		System.out.println("still fine." + in.available());
 	}
 	public byte[]     array(){
 		ByteArrayOutputStream out = new ByteArrayOutputStream();

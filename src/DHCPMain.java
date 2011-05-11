@@ -1,5 +1,7 @@
 
 import mgui.DHCPFrame;
+import mio.MappingFile;
+import mnet.DHCPServer;
 
 public class DHCPMain {
 	public static void main(String[] args){
@@ -25,7 +27,16 @@ public class DHCPMain {
 			DHCPServer server = new DHCPServer(InetAddress.getByAddress(new byte[]{(byte)192, (byte)168, (byte)1, (byte)1}));
 			server.start();
 		} catch (SocketException e) { e.printStackTrace();
-		} catch (UnknownHostException e) { e.printStackTrace(); }*/
-		new DHCPFrame();
+		} catch (UnknownHostException e) { e.printStackTrace(); } */
+		
+		DHCPFrame frame = new DHCPFrame();
+/*		DHCPServer server = frame.getDHCPServer();
+		server.setConfigurations(
+				config.getAsBytes("gateway", "\\."),
+				config.getAsBytes("dns", "\\."),
+				config.getAsBytes("renewal", " "),
+				config.getAsBytes("rebinding", " "),
+				config.getAsBytes("lease", " "),
+				config.getAsBytes("subnet-mask", "\\."));*/
 	}
 }

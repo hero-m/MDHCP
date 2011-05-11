@@ -1,9 +1,12 @@
 package mnet;
 
+import java.io.Serializable;
 import java.util.Calendar;
 import java.util.Date;
 
-public class Lease {
+public class Lease implements Serializable{
+	private static final long serialVersionUID = 3918793671515770547L;
+	
 	private byte[] ip;
 	private byte[] hwAddress;
 	private Date   leaseTime;
