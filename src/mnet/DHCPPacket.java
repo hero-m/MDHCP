@@ -22,9 +22,10 @@ public class DHCPPacket {
 				   siaddr, //4 bytes
 				   giaddr, //4 bytes
 				   chaddr, //client's hardware address (16 bytes)
-				   sname ,  //64 bytes
-				   file  ;   //128 bytes
-	private int padding = 0;
+				   sname , //64 bytes
+				   file  , //128 bytes
+				   cookie;
+	
 	private Vector<Option> options; //variable number of options
 	
 	public DHCPPacket(){ 
@@ -78,10 +79,13 @@ public class DHCPPacket {
 	public DHCPPacket setSname  (int zero){ if(zero == 0) this.sname = new byte[64]; return this;}
 	public DHCPPacket setFile   (byte[] file)  { this.file   = file  ; return this; }
 	public DHCPPacket setFile   (int zero){ if(zero == 0) this.file = new byte[128]; return this;}
-	
+	public DHCPPacket setCookie (){this.cookie = new byte[]{99, (byte)130, 83, 99};  return this;}
 	public DHCPPacket addOption(byte code, byte len, byte[] data){
 		if(data.length != len) throw new IllegalArgumentException();
 		options.add(new Option(code, len, data)); return this;
+	}
+	public DHCPPacket addOption(byte code, byte len, long data){
+		addOption(code, len, ByteFactory.getIntAsBytes((int)data)); return this;
 	}
 	public byte[]     getOption(byte code){
 		for(Option option : options){
@@ -89,6 +93,59 @@ public class DHCPPacket {
 				return option.data;
 		}
 		return null;
+	}
+	public String     getOptionString(byte code){
+		byte[] option = getOption(code);
+		String str = "";
+		switch(code){
+		case 1:
+		case 3:
+		case 6:
+		case 54:
+		case 50:
+			str = "(";
+			for(int i = 0; i < 3; i++)
+				str = str + ByteFactory.asInt(option[i]) + ".";
+			str = str + ByteFactory.asInt(option[3]) + ")";
+			break;
+		case 58:
+		case 59:
+		case 51:
+			int time = ByteFactory.getBytesAsInt(option);
+			int days = time / 3600 * 24; time = time % (3600 * 24);
+			int hours = time / 3600; time = time % 3600;
+			int mins = time / 60; time = time % 60;
+			int secs = time;
+			if( days > 0) str = str +  days + " Days, "   ;
+			if(hours > 0) str = str + hours + " Hours, "  ;
+			if( mins > 0) str = str +  mins + " Minutes, ";
+			if( secs > 0) str = str +  secs + " Seconds"  ;
+			break;
+		case 53: //message type
+			str = getMessageType();
+			break;
+		case 12: //host name
+			str = new String(option);
+			break;
+		case 55: //requested parameter list
+			str = "(";
+			for(int i = 0; i < option.length; i++){
+				str = str + option;
+				if(i < option.length - 1)
+					str = str + ", ";
+			}
+			str = str + ")";
+			break;
+		case -1: //stop option
+			str = "";
+			break;
+		case 61:
+			str = ByteFactory.getHex(option);
+			break;
+		default:
+			str = Arrays.toString(option);
+		}
+		return str;
 	}
 	
 	public byte       getOp    (){ return op    ; }
@@ -104,9 +161,14 @@ public class DHCPPacket {
 	public byte[]     getChaddr(){ return chaddr; }
 	public byte[]     getSname (){ return sname ; }
 	public byte[]     getFile  (){ return file  ; }
+	public byte[]     getCookie(){ return cookie; }
 	public byte[]     getFlags (){ return flags ; }
 	public boolean    getBroadcastFlag(){ if(flags[0] == 0) return false; else return true; }
-	
+	String[] messageTypes = new String[]{"DISCOVER", "OFFER", "REQUEST", "DECLINE",
+										 "ACK", "NAK", "RELEASE", "INFORM"};
+	public String     getMessageType(){
+		return messageTypes[ByteFactory.getBytesAsInt(getOption((byte) 53)) - 1];
+	}
 	public void       read (byte[] array){
 		ByteArrayInputStream in = new ByteArrayInputStream(array);
 		try {
@@ -130,9 +192,8 @@ public class DHCPPacket {
 		chaddr = new byte[16]; in.read(chaddr);
 		sname  = new byte[64]; in.read(sname );
 		file   = new byte[128];in.read(file  );
-		byte[] magiccookie = new byte[4];
-		in.read(magiccookie);
-		if(!Arrays.equals(magiccookie, Constants.MAGICCOOKIE))
+		cookie = new byte[4];  in.read(cookie);
+		if(!Arrays.equals(cookie, Constants.MAGICCOOKIE))
 			throw new Error("Bad Input Data. (Packet Data Corrupted)");
 		while(in.available() > 0){
 			in.read(temp);
@@ -145,18 +206,7 @@ public class DHCPPacket {
 			in.read(data);
 			options.add(new Option(code, len, data));
 		}
-		System.out.println("Finished Reading packet.");
-		/*System.out.println(options.get(53).code + "**");
-		System.out.flush();
-		padding = 0;
-		/*while(in.available() > 0){
-			in.read(temp);
-			System.out.println(temp[0] + "*");
-			if(temp[0] != 0)
-				throw new IOException("Wrong padding at end of options.");
-			padding++;
-		}*/
-		System.out.println("still fine." + in.available());
+		System.out.println("correctly read message.");
 	}
 	public byte[]     array(){
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -197,6 +247,7 @@ public class DHCPPacket {
 			out.write(new byte[]{0});
 			len += 1;
 		}
+		System.out.println("correctly created message.");
 	}
 	
 	private class Option{

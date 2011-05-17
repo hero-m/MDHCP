@@ -1,10 +1,10 @@
 
 import mgui.DHCPFrame;
-import mio.MappingFile;
-import mnet.DHCPServer;
+import mnet.Helper;
 
 public class DHCPMain {
 	public static void main(String[] args){
+		//Helper.fill();
 		/*try{
 			byte[] data = Helper.sendDiscoverPacket("eth0");
 			FileOutputStream file = new FileOutputStream("log.txt");
@@ -28,8 +28,8 @@ public class DHCPMain {
 			server.start();
 		} catch (SocketException e) { e.printStackTrace();
 		} catch (UnknownHostException e) { e.printStackTrace(); } */
-		
-		DHCPFrame frame = new DHCPFrame();
+		System.out.println("*"+System.getProperty("os.name")+"*");
+		new DHCPFrame();
 /*		DHCPServer server = frame.getDHCPServer();
 		server.setConfigurations(
 				config.getAsBytes("gateway", "\\."),

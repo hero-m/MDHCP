@@ -1,6 +1,10 @@
 package mstructs;
 
-public class ByteArray {
+import java.io.Serializable;
+
+public class ByteArray implements Serializable{
+	private static final long serialVersionUID = -4069696514988341800L;
+	
 	byte[] data;
 	public ByteArray(byte[] d){ data = d; }
 	@Override
@@ -21,5 +25,8 @@ public class ByteArray {
 			hash ^= data[i];
 		}
 		return hash;
+	}
+	public byte[] getData(){
+		return data;
 	}
 }

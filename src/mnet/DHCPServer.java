@@ -1,21 +1,22 @@
 package mnet;
 
-import java.io.FileInputStream;
+import java.io.BufferedReader    ;
+import java.io.EOFException      ;
+import java.io.FileInputStream   ;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.ObjectInputStream;
+import java.io.FileOutputStream  ;
+import java.io.IOException       ;
+import java.io.InputStreamReader ;
+import java.io.ObjectInputStream ;
 import java.io.ObjectOutputStream;
-import java.net.*         ;
-import java.util.Arrays   ;
-import java.util.Calendar ;
-import java.util.Date     ;
-import java.util.HashMap  ;
-import java.util.Map.Entry;
-import java.util.Random;
-import java.util.Vector   ;
-import java.awt.event.*   ;
-import javax.swing.Timer  ;
+import java.net.*        ;
+import java.util.Arrays  ;
+import java.util.Calendar;
+import java.util.HashMap ;
+import java.util.Random  ;
+import java.util.Vector  ;
+import java.awt.event.*  ;
+import javax.swing.Timer ;
 import mstructs.ByteArray;
 
 import mnet.Lease;
@@ -26,35 +27,38 @@ public class DHCPServer implements Runnable{
 	private HashMap<ByteArray, ReservedLease>reserved;
 	private Random rand = new Random();
 	private DatagramSocket socket;
+	private HashMap<ByteArray, MessageGroup> messages;
 	private final static int MAX_LEN = 2048;
-	private InetAddress dhcpServerIA;
-	private byte[] dhcpServerIP, gateway, dns, serverid,
-					renewaltime, rebindingtime, leasetime,
+	//private InetAddress dhcpServerIA;
+	private byte[]  dhcpServerIP, gateway, dns, serverid,
 					subnetmask, prefix;
+	private long renewaltime, rebindingtime, leasetime;
+	private boolean incrementalLease = false, verifyClients = false;
+	private long  minRenewal, minRebinding, minLease;
 	private Timer timer = new Timer(5 * 60 * 1000, new ActionListener(){
 		public void actionPerformed(ActionEvent e){
 			revokeExpiredLease();
 		}
 	});
-	public DHCPServer() throws SocketException{
-		Vector<InetAddress> ias = Helper.getAvailableInetAddresses();
-		dhcpServerIA = ias.firstElement();
-		if(ias.size() > 1)
-			System.out.println("Multiple IP Addresses detected. Using " + 
-								Helper.convertIPtoString(dhcpServerIA.getAddress()));
-		else if(ias.size() == 0)
-			throw new UnsupportedOperationException("Error: No IP Addresses detected.");
+	public DHCPServer() throws SocketException {// throws SocketException{
+		try{
+			socket = new DatagramSocket(67);
+			System.out.println("DHCP Server Created.\n");
+		}catch(SocketException e){
+			System.out.println("\nAn error occurred creating socket on port 67.\n" + 
+					"If running under linux, try using sudo.\n");
+			throw e;
+		}
 		init();
 	}
-	public DHCPServer(InetAddress ia) throws SocketException{
-		this.dhcpServerIA = ia;
-		init();
-	}
-	public void setConfigurations(byte[] gateway, byte[] dns, byte[] renewaltime,
-			byte[] rebindingtime, byte[] leasetime, byte[] subnetmask, byte[] prefix){
+	public void setConfigurations(byte[] gateway, byte[] dns, long renewaltime,
+			long rebindingtime, long leasetime, byte[] subnetmask, byte[] prefix,
+			byte[] dhcpServerIP, boolean incrementalLease, boolean verifyClients){
 		this.gateway = gateway; this.dns = dns; this.renewaltime = renewaltime;
 		this.rebindingtime = rebindingtime; this.leasetime = leasetime;
-		this.subnetmask = subnetmask; this.prefix = prefix;
+		this.subnetmask = subnetmask; this.prefix = prefix; this.incrementalLease = incrementalLease;
+		this.dhcpServerIP = dhcpServerIP; this.verifyClients = verifyClients;
+		serverid = dhcpServerIP;
 		
 	}
 	public void stopServer(){
@@ -63,30 +67,28 @@ public class DHCPServer implements Runnable{
 		socket.close();
 	}
 	
-	private void init() throws SocketException{
+	private void init(){
+		messages = new HashMap<ByteArray, MessageGroup>();
 		db  = new HashMap<ByteArray, Lease>(255);
 		ips = new  Vector<ByteArray>(255);
 		reserved = new HashMap<ByteArray, ReservedLease>(255);
-		//TODO: dhcpServerIP  = dhcpServerIA.getAddress();
-		serverid = new byte[]{(byte)192, (byte)168, 0, 1};
-		//serverid      = dhcpServerIP;
 		timer.start();
-		try{
-			socket = new DatagramSocket(67);
-			System.out.println("DHCP Server Created.\n" +
-					   "Use capturePacket to capture an incoming request.");
-		}catch(SocketException e){
-			System.out.println("\nAn error occurred creating socket on port 67.\n" + 
-					"If running under linux, try using sudo.\n");
-			throw e;
-		}
 		loadDB();
+		minRenewal   = 5 * 1000;
+		minRebinding = 2 * 60 * 1000;
+		minLease     = 5 * 60 * 1000;
+		doneInit = true;
 	}
+	private boolean doneInit = false;
 	
 	public void run(){
 		this.start();
 	}
 	public void start(){
+		if(!doneInit)
+			init();
+		doneInit = false;
+		//catch (SocketException e) { error(e, null);}
 		System.out.println("Server started listening on port 67...");
 		while(true){
 			byte[] temp = new byte[MAX_LEN];
@@ -98,8 +100,9 @@ public class DHCPServer implements Runnable{
 				Thread replyThread = new Thread(reply);
 				replyThread.run();
 				System.out.println("Packet received at " + Calendar.getInstance().getTime().toString() + ".");
-			} catch(SocketException e){ //this is not an error; stop server was pushed
-			} catch (IOException e) { error(e, null); }
+			} catch (SocketException e) { //this is not an error; stop server was pushed
+				timer.stop();
+			} catch (    IOException e) { error(e, null); }
 		}
 	}
 	private byte[] reserveNextAddress(byte[] hwAddress){
@@ -107,11 +110,6 @@ public class DHCPServer implements Runnable{
 			ByteArray hwArray = new ByteArray(hwAddress);
 			if(db.containsKey(hwArray))
 				return db.get(hwArray).getIP();
-			/*if(ips.size() + reserved.size() >= 254){
-				revokeExpiredLease();
-				if(ips.size() + reserved.size() >= 254)
-					return null;
-			}*/ //check number of clients;
 			byte[] next = new byte[4];
 			int attempts = 0;
 			while(attempts < 1000){
@@ -122,7 +120,7 @@ public class DHCPServer implements Runnable{
 				bitmask(next);
 				ByteArray ipArray = new ByteArray(next);
 				if(!ips.contains(ipArray) && !reserved.containsValue(ipArray)){
-					reserved.put(ipArray, new ReservedLease(hwAddress, Calendar.getInstance().getTime()));
+					reserved.put(ipArray, new ReservedLease(hwAddress, System.currentTimeMillis()));
 					return next;
 				}
 			}
@@ -135,6 +133,12 @@ public class DHCPServer implements Runnable{
 	public int getIPCount(){
 		return ips.size();
 	}
+	public Vector<ByteArray> getReserves(){
+		return new Vector<ByteArray>(reserved.keySet());
+	}
+	public int getReserveCount(){
+		return reserved.size();
+	}
 	private void bitmask(byte[] ip){
 		byte[] temp = Arrays.copyOf(subnetmask, 4);
 		for(int i = 0; i < temp.length; i++){
@@ -143,21 +147,45 @@ public class DHCPServer implements Runnable{
 			  ip[i] = (byte) (temp[i] | (subnetmask[i] & prefix[i]));
 		}
 	}
+	private boolean isReturning(byte[] ip, byte[] hwAddress){
+		ByteArray hwArray = new ByteArray(hwAddress);
+		ByteArray ipArray = new ByteArray(ip);
+		if(ips.contains(ipArray)){
+			if(db.containsKey(hwArray) && Arrays.equals(ip, db.get(hwArray).getIP())){
+				return true;
+			}
+		}
+		return false;
+	}
 	private boolean registerAddress(byte[] ip, byte[] hwAddress){
 		ByteArray hwArray = new ByteArray(hwAddress);
 		ByteArray ipArray = new ByteArray(ip);
 		synchronized(this){
 			if(ips.contains(ipArray)){
 				if(db.containsKey(hwArray) && Arrays.equals(ip, db.get(hwArray).getIP())){
-					db.remove(hwArray);
-					db.put(hwArray, new Lease(ip, hwAddress, leasetime));
+					if(incrementalLease){
+						long prevLease = db.get(hwArray).getLeaseTime(),
+							 prevRenewal = db.get(hwArray).getRenewalTime(),
+							 prevRebinding = db.get(hwArray).getRebindingTime();
+						long newLease = Math.min(prevLease * 2, leasetime),
+							 newRenewal = Math.min(prevRenewal * 2, renewaltime),
+							 newRebinding = Math.min(prevRebinding * 2, rebindingtime);
+						db.remove(hwArray);
+						db.put(hwArray, new Lease(ip, hwAddress, newLease, newRenewal, newRebinding));
+					} else {
+						db.remove(hwArray);
+						db.put(hwArray, new Lease(ip, hwAddress, leasetime, renewaltime, rebindingtime));
+					}
 					return true;
 				}
 			}else if(reserved.containsKey(ipArray)
 					&& Arrays.equals(reserved.get(ipArray).hwAddress, hwAddress)){
 				reserved.remove(ipArray);
 				ips.add(ipArray);
-				db.put(hwArray, new Lease(ip, hwAddress, leasetime));
+				if(incrementalLease)
+					db.put(hwArray, new Lease(ip, hwAddress, minLease, minRenewal, minRebinding));
+				else
+					db.put(hwArray, new Lease(ip, hwAddress, leasetime, renewaltime, rebindingtime));
 				return true;
 			}
 			return false;
@@ -169,7 +197,6 @@ public class DHCPServer implements Runnable{
 		System.out.println("Listening started on port 67...");
 		try{
 			socket.receive(packet);
-			System.out.println("Packet captured.");
 			int len = packet.getLength();
 			byte[] data = java.util.Arrays.copyOf(temp, len);
 			return data;
@@ -179,10 +206,10 @@ public class DHCPServer implements Runnable{
 	private void revokeExpiredLease(){
 		synchronized(this){
 			Vector<Lease> toBeRemoved = new Vector<Lease>();
-			Date now = Calendar.getInstance().getTime();
+			long now = System.currentTimeMillis();
 			for(Lease lease : db.values()){
-				Date end = add(lease.getLeaseStart(), lease.getLeaseTime());
-				if(end.before(now)){
+				long end = lease.getLeaseStart() + lease.getLeaseTime();
+				if(end < now){
 					toBeRemoved.add(lease);
 				}
 			}
@@ -191,10 +218,9 @@ public class DHCPServer implements Runnable{
 				 db.remove(new ByteArray(toBeRemoved.elementAt(i).getHwAddress()));
 			}
 			
-			long now_seconds = now.getTime();
 			Vector<ByteArray> r = new Vector<ByteArray>();
 			for(ByteArray rl : reserved.keySet()){
-				if(now_seconds > reserved.get(rl).date + 600 * 1000)
+				if(now > reserved.get(rl).date + 600 * 1000)
 					r.add(rl);
 			}
 			for(int i = 0; i < r.size(); i++){
@@ -202,17 +228,11 @@ public class DHCPServer implements Runnable{
 			}
 		}
 	}
-	private Date add(Date first, Date other){
-		Calendar c = Calendar.getInstance();
-		c.setTime(first);
-		long firsttime = c.getTimeInMillis();
-		c.setTime(other);
-		long othertime = c.getTimeInMillis();
-		c.setTimeInMillis(firsttime + othertime);
-		return c.getTime();
-	}
 	private class ReplyThread implements Runnable{
 		DatagramPacket requestPacket;
+		boolean prev = false;
+		Timer timer;
+		Process process;
 		public ReplyThread(DatagramPacket requestdp){
 			requestPacket = requestdp;
 		}
@@ -222,18 +242,89 @@ public class DHCPServer implements Runnable{
 			byte[] requestdata = java.util.Arrays.copyOf(requestPacket.getData(), len);
 			DHCPPacket request = new DHCPPacket();
 			request.read(requestdata);
+			
+			ByteArray xidArray = new ByteArray(request.getXid());
+			if(messages.containsKey(xidArray)){
+				messages.get(xidArray).add(request);
+
+			}
+			else{
+				MessageGroup newGroup = new MessageGroup();
+				newGroup.add(request);
+				messages.put(xidArray, newGroup);
+
+			}
+
 			byte requestType = request.getOption((byte)53)[0];
 			if(requestType == Constants.DHCPDISCOVER){
 				byte[] reservedIP = reserveNextAddress(request.getChaddr());
+				sendReply(request, Constants.DHCPOFFER, reservedIP);
 			}else if(requestType == Constants.DHCPREQUEST){
-				if(!Arrays.equals(request.getOption((byte) 54), serverid))
+				if(request.getOption((byte)54) != null && 
+						!Arrays.equals(request.getOption((byte) 54), new byte[]{0,0,0,0}) &&
+						!Arrays.equals(request.getOption((byte) 54), serverid))
 					return;
-				byte[] reservedIP = request.getOption((byte)50); 
+				byte[] reservedIP = request.getOption((byte)50);
+				if(reservedIP == null)
+					reservedIP = request.getCiaddr();
+				prev = isReturning(reservedIP, request.getChaddr());
 				boolean success = registerAddress(reservedIP, request.getChaddr());
-				if(success)
+				System.out.println("Registering Address successful");
+				if(success){
 					sendReply(request, Constants.DHCPACK, reservedIP);
+					if(verifyClients && System.getProperty("os.name").equals("Linux")){
+						try { Thread.sleep(100); }
+						catch (InterruptedException e) {error (e, null);}
+						String cmd = "arping " + Helper.ipToString(reservedIP);
+						try {
+							process = Runtime.getRuntime().exec(cmd);
+							BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()));
+							boolean matched = false;
+							String macStr = null;
+							System.out.println("Running "+cmd);
+							String str;
+							timer = new Timer(5000, new ActionListener(){
+								public void actionPerformed(ActionEvent e){
+									System.out.println("ARPing thread killed.");
+									process.destroy();
+									timer.stop();
+								}
+							});
+							timer.start();
+							outer: while((str = br.readLine()) != null){
+								String[] pieces = str.split("\\s");
+								for(int i = 0; i < pieces.length; i++){
+									System.out.print(pieces[i]+"*");
+									if(pieces[i].matches("\\[\\p{XDigit}*:\\p{XDigit}*:\\p{XDigit}*:"+
+															"\\p{XDigit}*:\\p{XDigit}*:\\p{XDigit}*\\]")){
+										System.out.println("Item Found (" + pieces[i] + ").");
+										macStr = pieces[i];
+										matched = true;
+										timer.stop();
+										process.destroy();
+										break outer;
+									}
+								}
+							}
+							if(!matched){
+								ByteArray mac = Helper.stringToMac(macStr);
+								ByteArray ip = new ByteArray(db.get(mac).getIP());
+								ips.remove(ip);
+								db.remove(mac);
+							}else{
+								ByteArray mac = Helper.stringToMac(macStr);
+								ByteArray ip = new ByteArray(db.get(mac).getIP());
+								ByteArray resIP = new ByteArray(reservedIP);
+								if(!resIP.equals(ip)){
+									ips.remove(ip);
+									db.remove(mac);
+								}
+							}
+						} catch (IOException e) { error(e, null); }
+					}
+				}
 				else
-					sendReply(request, Constants.DHCPNACK, reservedIP);
+					sendReply(request, Constants.DHCPNAK, reservedIP);
 			}else if(requestType == Constants.DHCPRELEASE){
 				synchronized(this){
 					byte[] hwAddress = request.getChaddr();
@@ -244,8 +335,10 @@ public class DHCPServer implements Runnable{
 						db.remove(new ByteArray(hwAddress));
 					}
 				}
+			}else if(requestType == Constants.DHCPINFORM){
+				sendReply(request, Constants.DHCPACK, request.getCiaddr());
 			}
-			//TODO: Decline & Inform.
+			System.out.println("finished receiving");
 		}
 		public void sendReply(DHCPPacket request, byte requestType, byte[] reservedIP){
 			DHCPPacket reply = new DHCPPacket();
@@ -258,23 +351,47 @@ public class DHCPServer implements Runnable{
 				 .setBroadcastFlag(true)
 				 .setCiaddr(0)
 				 .setYiaddr(reservedIP)
-				 .setSiaddr(dhcpServerIA.getAddress())
+				 .setSiaddr(dhcpServerIP)
 				 .setGiaddr(0)
 				 .setChaddr(request.getChaddr())
 				 .setSname (0)
-				 .setFile  (0);
-			
+				 .setFile  (0)
+				 .setCookie( );
 			reply.addOption((byte)53, (byte)1, new byte[]{requestType})
 				 .addOption((byte)1 , (byte)4, subnetmask   )
 				 .addOption((byte)3 , (byte)4, gateway      )
 				 .addOption((byte)6 , (byte)4, dns          )
-				 .addOption((byte)58, (byte)4, renewaltime  )
-				 .addOption((byte)59, (byte)4, rebindingtime)
-				 .addOption((byte)51, (byte)4, leasetime    )
 				 .addOption((byte)54, (byte)4, serverid     );
-			   //.addOption((byte)12, (byte)n, new byte[]{(byte)'y', 'our-pc' ...}) // client host name
+			if(request.getOption((byte)53)[0] != 8){
+				if(incrementalLease){
+					if(!prev){
+						try{
+						reply.addOption((byte)58, (byte)4, minRenewal / 1000)
+							 .addOption((byte)59, (byte)4, minRebinding / 1000)
+							 .addOption((byte)51, (byte)4, minLease    / 1000);
+						}catch(Exception e){ e.printStackTrace(); }
+					}else{
+						ByteArray hwArray = new ByteArray(request.getChaddr());
+						reply.addOption((byte)58, (byte)4, db.get(hwArray).getRenewalTime() / 1000 )
+							 .addOption((byte)59, (byte)4, db.get(hwArray).getRebindingTime()/ 1000)
+							 .addOption((byte)51, (byte)4, db.get(hwArray).getLeaseTime()  / 1000 );
+					}
+				}else{
+					 reply.addOption((byte)58, (byte)4, renewaltime / 1000 )
+						  .addOption((byte)59, (byte)4, rebindingtime/ 1000)
+						  .addOption((byte)51, (byte)4, leasetime   / 1000 );
+				}
+			}
 			
 			byte[] replydata = reply.array();
+			ByteArray xidArray = new ByteArray(reply.getXid());
+			if(messages.containsKey(xidArray))
+				messages.get(xidArray).add(reply);
+			else{
+				MessageGroup newGroup = new MessageGroup();
+				newGroup.add(reply);
+				messages.put(xidArray, newGroup);
+			}
 			DatagramPacket replyPacket = new DatagramPacket(replydata, replydata.length);
 			
 			DatagramSocket socket;
@@ -291,28 +408,35 @@ public class DHCPServer implements Runnable{
 			}
 		}
 	}
-	//TODO: siaddr 192.168.1.1 ?????
 	private void saveDB(){
 		try{
 			ObjectOutputStream objStream = new ObjectOutputStream(new FileOutputStream("db", false));
-			for(Entry<ByteArray, mnet.Lease> lease : db.entrySet()){
-				objStream.writeObject(lease);
+			for(ByteArray key : db.keySet()){
+				objStream.writeObject(key);
+				objStream.writeObject(db.get(key));
 			}
 			objStream.close();
 		}catch(IOException e){ error(e, null); }
 	}
 	private void loadDB(){
+		ObjectInputStream objStream = null;
 		try{
-			ObjectInputStream objStream = new ObjectInputStream(new FileInputStream("db"));
-			while(objStream.available() > 0){
-				Entry<ByteArray, mnet.Lease> lease;
-				lease = (Entry<ByteArray, mnet.Lease>)objStream.readObject();
-				db.put(lease.getKey(), lease.getValue());
+			FileInputStream fileStream = new FileInputStream("db");
+			objStream = new ObjectInputStream(fileStream);
+			while(true){
+				ByteArray key = (ByteArray)objStream.readObject();
+				Lease value = (Lease)objStream.readObject();
+				db.put(key, value);
+				ips.add(new ByteArray(value.getIP()));
 			}
-			objStream.close();
-		} catch ( FileNotFoundException e) { // no error. create a new file on saveDB. 
+		} catch (          EOFException e) { error(e, null); //no error, just end of file reached.
+		} catch ( FileNotFoundException e) { error(e, null); //no error. create a new file on saveDB. 
 		} catch (           IOException e) { error(e, null);
-		} catch (ClassNotFoundException e) { error(e, null); }
+		} catch (ClassNotFoundException e) { error(e, null);
+		} finally {
+			try {if(objStream != null) objStream.close(); }
+			catch (IOException e) { error(e, null); }
+		}
 	}
 	public void clearDB(){
 		synchronized(this){
@@ -324,13 +448,39 @@ public class DHCPServer implements Runnable{
 	private class ReservedLease{
 		byte[] hwAddress;
 		long date;
-		ReservedLease(byte[] hw, Date d){
+		ReservedLease(byte[] hw, long d){
 			hwAddress = hw;
-			date = d.getTime();
+			date = d;
 		}
 	}
 
 	private void error(Exception e, String text){
 		e.printStackTrace();
+	}
+	
+	public class MessageGroup{
+		private Vector<DHCPPacket> messages;
+		public MessageGroup(){
+			messages = new Vector<DHCPPacket>();
+		}
+		public void add(DHCPPacket m){
+			messages.add(m);
+		}
+		public DHCPPacket getMessage(int index){
+			return messages.get(index);
+		}
+		public int getSize(){
+			return messages.size();
+		}
+	}
+	
+	public int getMessageCount(){
+		int sum = 0;
+		for(MessageGroup mg : messages.values())
+			sum += mg.messages.size();
+		return sum;
+	}
+	public HashMap<ByteArray, MessageGroup> getMessages(){
+		return messages;
 	}
 }

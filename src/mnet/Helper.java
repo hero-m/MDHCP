@@ -12,6 +12,8 @@ import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.Vector;
 
+import mstructs.ByteArray;
+
 public class Helper {
 	public static byte[] getMacAddress(String hw, int len){
 		try {
@@ -21,7 +23,13 @@ public class Helper {
 		
 		return null;
 	}
-	
+	static byte[] mac;
+	public static void randomize(){
+		mac = new byte[16];
+		for(int i = 0; i < 6; i++){
+			mac[i] = (byte)(Math.random() * 256);
+		}
+	}
 	public static byte[] sendDiscoverPacket(String hw){
 		DHCPPacket packet = new DHCPPacket();
 		packet.setOp(Constants.BOOTREQUEST)
@@ -35,7 +43,7 @@ public class Helper {
 			  .setYiaddr(0)
 			  .setSiaddr(0)
 			  .setGiaddr(0)
-			  .setChaddr(getMacAddress(hw, 16))
+			  .setChaddr(mac)
 			  .setSname (0)
 			  .setFile  (0);
 			
@@ -50,6 +58,7 @@ public class Helper {
 			dgpacket.setAddress(InetAddress.getByAddress(new byte[]{(byte)255, (byte)255, (byte)255, (byte)255}));
 			socket.setBroadcast(true);
 			socket.send(dgpacket);
+			socket.close();
 		}catch (SocketException e)      { e.printStackTrace();
 		}catch (UnknownHostException e) { e.printStackTrace();
 		}catch (IOException e)          { e.printStackTrace(); }
@@ -67,14 +76,63 @@ public class Helper {
 			System.out.println("Packet captured.");
 			int len = p.getLength();
 			byte[] data = java.util.Arrays.copyOf(temp, len);
-			FileOutputStream file = new FileOutputStream("clientlog.txt");
 			DHCPPacket packet = new DHCPPacket();
 			packet.read(data);
-			file.write(("Packet length: "+ packet.array().length + "\n").getBytes("US-ASCII"));
-			file.write(ByteFactory.simpleFormatted(packet.array()).getBytes("US-ASCII"));
-			file.close();
+			sendRequestPacket(packet);
+
+			temp = new byte[500];
+			p = new DatagramPacket(temp, 500);
+			System.out.println("Listening started on port 68...");
+			socket.receive(p);
+			System.out.println("Packet captured.");
+			len = p.getLength();
+			data = java.util.Arrays.copyOf(temp, len);
+			packet = new DHCPPacket();
+			packet.read(data);
 		} catch (SocketException e) { e.printStackTrace();
 		} catch (IOException e) { e.printStackTrace(); }
+	}
+	public static void   sendRequestPacket(DHCPPacket offer){
+		DHCPPacket packet = new DHCPPacket();
+		packet.setOp(Constants.BOOTREQUEST)
+			  .setHtype((byte) 1)
+			  .setHlen ((byte) 6)
+			  .setHops ((byte) 0)
+			  .setXid(offer.getXid())
+			  .setSecs  (0)
+			  .setBroadcastFlag(true)
+			  .setCiaddr(0)
+			  .setYiaddr(0)
+			  .setSiaddr(0)
+			  .setGiaddr(0)
+			  .setChaddr(mac)
+			  .setSname (0)
+			  .setFile  (0);
+		
+		packet.addOption((byte)53, (byte)1, new byte[]{3})
+			  .addOption((byte)50, (byte)4, offer.getYiaddr());
+		
+		byte[] data = packet.array();
+		
+		try{	
+			DatagramSocket socket   = new DatagramSocket();
+			DatagramPacket dgpacket = new DatagramPacket(data, data.length);
+			dgpacket.setPort(67);
+			dgpacket.setAddress(InetAddress.getByAddress(new byte[]{(byte)255, (byte)255, (byte)255, (byte)255}));
+			socket.setBroadcast(true);
+			socket.send(dgpacket);
+			socket.close();
+		}catch (SocketException e)      { e.printStackTrace();
+		}catch (UnknownHostException e) { e.printStackTrace();
+		}catch (IOException e)          { e.printStackTrace(); }
+		
+		//return data;
+	}
+	public static void fill(){
+		while(true){
+			randomize();
+			getPacketAsClient("eth0");
+		}
 	}
 	public static Vector<InetAddress> getAvailableInetAddresses(){
 		Vector<InetAddress> found = new Vector<InetAddress>();
@@ -96,9 +154,35 @@ public class Helper {
 		else
 			return null;
 	}
-	public static String convertIPtoString(byte[] ip){
+	public static String ipToString(byte[] ip){
 		if(ip.length != 4) return null;
 		return ByteFactory.asInt(ip[0]) + "." + ByteFactory.asInt(ip[1]) + "." +
 			   ByteFactory.asInt(ip[2]) + "." + ByteFactory.asInt(ip[3]);
+	}
+	public static String xidToString(byte[] xid){
+		String xidStr = "0x";
+		for(int i = 0; i < xid.length; i++)
+			xidStr = xidStr + ByteFactory.getHex(xid[i]);
+		return xidStr;
+	}
+	public static String secsToString(byte[] secs){
+		return ByteFactory.getBytesAsInt(secs)+"";
+	}
+	public static String flagsToString(byte[] flags){
+		return ByteFactory.getBinary(flags);
+	}
+	public static String chaddrToString(byte[] chaddr){
+		return ByteFactory.getHex(chaddr);
+	}
+	public static String cookieToString(byte[] cookie){
+		return ByteFactory.getHex(cookie);
+	}
+	public static ByteArray stringToMac(String str){
+		byte[] mac = new byte[16];
+		String[] parts = str.split(":");
+		for(int i = 0; i < 6; i++){
+			mac[i] = (byte) Integer.parseInt(parts[i], 16);
+		}
+		return new ByteArray(mac);
 	}
 }

@@ -1,36 +1,40 @@
 package mnet;
 
 import java.io.Serializable;
-import java.util.Calendar;
-import java.util.Date;
 
 public class Lease implements Serializable{
 	private static final long serialVersionUID = 3918793671515770547L;
 	
 	private byte[] ip;
 	private byte[] hwAddress;
-	private Date   leaseTime;
-	private Date   LeaseStart;
+	private long leaseTime;
+	private long leaseStart;
+	private long renewalTime;
+	private long rebindingTime;
 
-	public  Lease(byte[] ip, byte[] hwAddress, byte[] leaseTime){
-		this.ip         = ip        ;
-		this.hwAddress  = hwAddress ;
-		this.LeaseStart = Calendar.getInstance().getTime();
-		this.leaseTime  = new Date(ByteFactory.getBytesAsInt(leaseTime)) ;
+	public  Lease(byte[] ip, byte[] hwAddress, long leaseTime, long renewalTime, long rebindingTime){
+		this(ip, hwAddress, leaseTime, System.currentTimeMillis(), renewalTime, rebindingTime);
 	}
 	
-	public  Lease(byte[] ip, byte[] hwAddress, Date leaseTime, Date leaseStart){
+	public  Lease(byte[] ip, byte[] hwAddress, long leaseTime,
+			long leaseStart, long renewalTime, long rebindingTime){
 		this.ip         = ip        ;
 		this.hwAddress  = hwAddress ;
-		this.LeaseStart = leaseStart;
+		this.leaseStart = leaseStart;
 		this.leaseTime  = leaseTime ;
+		this.renewalTime = renewalTime;
+		this.rebindingTime = rebindingTime;
 	}
-	public  byte[] getIP()         { return ip;         }
-	public  Date   getLeaseTime () { return leaseTime;  }
-	public  byte[] getHwAddress () { return hwAddress;  }
-	public  Date   getLeaseStart() { return LeaseStart; }
-	public  void   setIP        (byte[] ip)         { this.ip = ip;               }
-	public  void   setLeaseTime (Date   leaseTime ) { this.leaseTime = leaseTime; }
-	public  void   setHwAddress (byte[] hwAddress ) { this.hwAddress = hwAddress; }
-	public  void   setLeaseStart(Date   leaseStart) { LeaseStart = leaseStart;    }
+	public  byte[] getIP()           { return ip;           }
+	public  long   getLeaseTime ()   { return leaseTime;    }
+	public  byte[] getHwAddress ()   { return hwAddress;    }
+	public  long   getLeaseStart()   { return leaseStart;   }
+	public  long   getRenewalTime()  { return renewalTime;  }
+	public  long   getRebindingTime(){ return rebindingTime;}
+	public  void   setIP        (byte[] ip)         { this.ip = ip;                   }
+	public  void   setLeaseTime (long   leaseTime ) { this.leaseTime   = leaseTime;   }
+	public  void   setHwAddress (byte[] hwAddress ) { this.hwAddress   = hwAddress;   }
+	public  void   setLeaseStart(long   leaseStart) { this.leaseStart  = leaseStart;  }
+	public  void   setRenewalTime(long renewalTime) { this.renewalTime = renewalTime; }
+	public  void   setRebindingTime(long rebindingTime){ this.rebindingTime = rebindingTime; }
 }

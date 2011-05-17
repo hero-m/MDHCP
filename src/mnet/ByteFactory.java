@@ -3,6 +3,7 @@ package mnet;
 
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
+import java.nio.LongBuffer;
 import java.util.Arrays;
 
 public class ByteFactory {
@@ -14,7 +15,7 @@ public class ByteFactory {
 		return str;
 	}
 	public static int asInt(byte b){
-		if(b < 0) return (int)(255 + b);
+		if(b < 0) return (int)(256 + b);
 		else return b;
 	}
 	public static String getBinary(byte b){
@@ -35,6 +36,12 @@ public class ByteFactory {
 	}
 	public static byte[] getIntAsBytes(int num){
 		return getIntAsBytes(num, 4);
+	}
+	public static byte[] getLongAsBytes(long num){
+		ByteBuffer buffer = ByteBuffer.allocate(8);
+		LongBuffer longBuffer = buffer.asLongBuffer();
+		longBuffer.put(num);
+		return buffer.array();
 	}
 	public static byte[] getIntAsBytes(int num, int size){
 		ByteBuffer buffer = ByteBuffer.allocate(4);
